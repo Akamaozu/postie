@@ -1,5 +1,5 @@
 <?php
-
+define('POSTIE_DEBUG', 'fuck yeah');
 function postie_disable_revisions($restore = false) {
     global $_wp_post_type_features, $_postie_revisions;
 
@@ -171,6 +171,38 @@ function PostEmail($poster, $mimeDecodedEmail, $config) {
     if ($filternewlines)
         $content = FilterNewLines($content, $convertnewline);
 
+    // Tag Support
+    if (strpos($content, '<html>') === false){
+        $tag_matches = array();
+        $tag_match = preg_match_all("/#([a-zA-Z0-9\-]+)/", strip_tags($content), $tag_matches);
+        $content_splitted = preg_split('/[^\#a-zA-Z0-9\-]+/', $content);
+        if (defined('POSTIE_DEBUG')) {
+            echo "the matches follow:\n";
+            print_r($tag_matches);
+        }
+        function slugify($t){
+            return strtolower($t);
+        }
+        if ($tag_match !== false && $tag_match !== 0){
+            foreach($tag_matches[1] as $tag){ // In the format of "tag1", "tag2"
+                if (!term_exists(slugify($tag), 'post_tag')){
+                    $wp_term = wp_insert_term($tag, 'post_tag', array('slug' => slugify($tag)));
+                } else {
+                    $wp_term = get_term_by('slug', slugify($tag), 'post_tag', ARRAY_A, 'raw');
+                }
+                
+                if (is_array($wp_term)){
+                    $term_id = $wp_term['term_id'];
+                        
+                    $content_splitted = array_replace($content_splitted, array_fill_keys(array_keys($content_splitted, '#' . $tag), '<a href="' . get_tag_link($term_id) . '">#' . $tag . '</a>'));
+                } else if (defined('POSTIE_DEBUG')){
+                    print_r($wp_term);
+                }
+            }
+        }
+        $post_tags = $tag_matches[1];
+        $content = implode(' ', $content_splitted);
+    }
 
     if ($delay != 0 && $post_status == 'publish') {
         $post_status = 'future';
