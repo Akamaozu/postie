@@ -1,5 +1,5 @@
 <?php
-define('POSTIE_DEBUG', 'fuck yeah');
+//define('POSTIE_DEBUG', 'fuck yeah');
 function postie_disable_revisions($restore = false) {
     global $_wp_post_type_features, $_postie_revisions;
 
