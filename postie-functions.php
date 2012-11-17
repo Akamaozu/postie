@@ -175,13 +175,15 @@ function PostEmail($poster, $mimeDecodedEmail, $config) {
     if (strpos($content, '<html>') === false){
         $tag_matches = array();
         $tag_match = preg_match_all("/#([a-zA-Z0-9\-]+)/", strip_tags($content), $tag_matches);
-        $content_splitted = preg_split('/[^\#a-zA-Z0-9\-]+/', $content);
+        $content_splitted = preg_split('/([^\#a-zA-Z0-9\-]+)/', $content, -1, PREG_SPLIT_DELIM_CAPTURE);
         if (defined('POSTIE_DEBUG')) {
             echo "the matches follow:\n";
             print_r($tag_matches);
         }
+        if (!function_exists('slugify')){
         function slugify($t){
             return strtolower($t);
+        }
         }
         if ($tag_match !== false && $tag_match !== 0){
             foreach($tag_matches[1] as $tag){ // In the format of "tag1", "tag2"
@@ -201,7 +203,7 @@ function PostEmail($poster, $mimeDecodedEmail, $config) {
             }
         }
         $post_tags = $tag_matches[1];
-        $content = implode(' ', $content_splitted);
+        $content = trim(implode('', $content_splitted));
     }
 
     if ($delay != 0 && $post_status == 'publish') {
