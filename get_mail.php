@@ -1,53 +1,76 @@
 <?php
 
-include_once (dirname(dirname(dirname(dirname(__FILE__)))) . DIRECTORY_SEPARATOR . "wp-config.php");
+//support moving wp-config.php as described here http://codex.wordpress.org/Hardening_WordPress#Securing_wp-config.php
+$wp_config_path = dirname(dirname(dirname(dirname(__FILE__))));
+if (file_exists($wp_config_path . DIRECTORY_SEPARATOR . "wp-config.php")) {
+    include_once ($wp_config_path . DIRECTORY_SEPARATOR . "wp-config.php");
+} else {
+    include_once (dirname($wp_config_path)) . DIRECTORY_SEPARATOR . "wp-config.php";
+}
+
 require_once (dirname(__FILE__) . DIRECTORY_SEPARATOR . 'mimedecode.php');
 require_once (dirname(__FILE__) . DIRECTORY_SEPARATOR . 'postie-functions.php');
+if (!function_exists('file_get_html'))
+    require_once (dirname(__FILE__) . DIRECTORY_SEPARATOR . 'simple_html_dom.php');
 
-print("<pre>\n");
-print("This is the postie plugin\n");
-print("time:" . time() . "\n");
-include('Revision');
-$config = get_option('postie-settings');
+EchoInfo("Starting mail fetch");
+EchoInfo("Postie Version: " . POSTIE_VERSION);
+EchoInfo("Debug mode: " . (IsDebugMode() ? "On" : "Off"));
+EchoInfo("Time: " . date('Y-m-d H:i:s', time()) . " GMT");
+$wp_content_path = dirname(dirname(dirname(__FILE__)));
+DebugEcho("wp_content_path: $wp_content_path");
+if (file_exists($wp_content_path . DIRECTORY_SEPARATOR . "filterPostie.php")) {
+    DebugEcho("found filterPostie.php in $wp_content_path");
+    include_once ($wp_content_path . DIRECTORY_SEPARATOR . "filterPostie.php");
+}
+
+$test_email = null;
+$config = config_Read();
 extract($config);
-$emails = FetchMail($mail_server, $mail_server_port, $mail_userid, $mail_password, $input_protocol, $time_offset, $test_email, $delete_mail_after_processing);
+if (!isset($maxemails))
+    $maxemails = 0;
+
+$emails = FetchMail($mail_server, $mail_server_port, $mail_userid, $mail_password, $input_protocol, $time_offset, $test_email, $delete_mail_after_processing, $maxemails, $email_tls);
 $message = 'Done.';
+
+EchoInfo(sprintf(__("There are %d messages to process", "postie"), count($emails)));
+
+if (function_exists('memory_get_usage'))
+    DebugEcho(__("memory at start of e-mail processing:") . memory_get_usage());
+
+DebugEcho("Error log: " . ini_get('error_log'));
+DebugDump($config);
+
 //loop through messages
+$message_number = 0;
 foreach ($emails as $email) {
-    if (function_exists('memory_get_usage'))
-        echo "memory at start of e-mail processing:" . memory_get_usage() . "\n";
+    $message_number++;
+    DebugEcho("$message_number: ------------------------------------");
     //sanity check to see if there is any info in the message
     if ($email == NULL) {
         $message = __('Dang, message is empty!', 'postie');
+        EchoInfo("$message_number: $message");
         continue;
     } else if ($email == 'already read') {
-        $message = "\n" . __("There does not seem to be any new mail.", 'postie') .
-                "\n";
+        $message = __("Message is already marked 'read'.", 'postie');
+        EchoInfo("$message_number: $message");
         continue;
-    }
-    // check for XSS attacks - we disallow any javascript, meta, onload, or base64
-    if (preg_match("@((%3C|<)/?script|<meta|document\.|\.cookie|\.createElement|onload\s*=|(eval|base64)\()@is", $email)) {
-      //  echo "possible XSS attack - ignoring email\n";
-      //  continue;
-      // fuck this shit
     }
 
     $mimeDecodedEmail = DecodeMIMEMail($email, true);
 
+    DebugEmailOutput($email, $mimeDecodedEmail);
+
     //Check poster to see if a valid person
     $poster = ValidatePoster($mimeDecodedEmail, $config);
     if (!empty($poster)) {
-        if ($test_email)
-            DebugEmailOutput($email, $mimeDecodedEmail);
         PostEmail($poster, $mimeDecodedEmail, $config);
+    } else {
+        EchoInfo("Ignoring email - not authorized.");
     }
-    else {
-        print("<p>Ignoring email - not authorized.\n");
-    }
-    if (function_exists('memory_get_usage'))
-        echo "memory at end of e-mail processing:" . memory_get_usage() . "\n";
-} // end looping over messages
-print $message;
-print("</pre>\n");
+    flush();
+}
 
+if (function_exists('memory_get_usage'))
+    DebugEcho("memory at end of e-mail processing:" . memory_get_usage());
 ?>
