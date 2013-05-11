@@ -303,6 +303,10 @@ function CreatePost($poster, $mimeDecodedEmail, $post_id, &$is_reply, $config, $
     if ($fulldebug)
         DebugEcho("post newline: $content");
 
+    filter_UserTags($content, $config);
+    if ($fulldebug)
+        DebugEcho("post usertags: $content");
+
     filter_Start($content, $config);
     if ($fulldebug)
         DebugEcho("post start: $content");
