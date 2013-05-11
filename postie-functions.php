@@ -5,7 +5,7 @@
  */
 
 //to turn on debug output add the following line to wp-config.php
-define('POSTIE_DEBUG', true);
+//define('POSTIE_DEBUG', true);
 
 class PostiePostModifiers {
 
@@ -1437,6 +1437,47 @@ function filter_End(&$content, $config) {
             return $content;
         DebugEcho("end filter: $end");
         $content = substr($content, 0, $pos);
+    }
+}
+
+/**
+ * Tag Support (e.g. Hi there #tag)
+ * @param string
+ * @param filter
+ */
+function filter_UserTags(&$content, $config) {
+    if (strpos($content, '<html>') === false){
+        $tag_matches = array();
+        $tag_match = preg_match_all("/#([a-zA-Z0-9\-]+)/", strip_tags($content), $tag_matches);
+        $content_splitted = preg_split('/([^\#a-zA-Z0-9\-]+)/', $content, -1, PREG_SPLIT_DELIM_CAPTURE);
+        if (defined('POSTIE_DEBUG')) {
+            DebugEcho("the matches follow:");
+            DebugEcho(print_r($tag_matches, true));
+        }
+        if (!function_exists('slugify')){
+        function slugify($t){
+            return strtolower($t);
+        }
+        }
+        if ($tag_match !== false && $tag_match !== 0){
+            foreach($tag_matches[1] as $tag){ // In the format of "tag1", "tag2"
+                if (!term_exists(slugify($tag), 'post_tag')){
+                    $wp_term = wp_insert_term($tag, 'post_tag', array('slug' => slugify($tag)));
+                } else {
+                    $wp_term = get_term_by('slug', slugify($tag), 'post_tag', ARRAY_A, 'raw');
+                }
+                
+                if (is_array($wp_term)){
+                    $term_id = $wp_term['term_id'];
+                        
+                    $content_splitted = array_replace($content_splitted, array_fill_keys(array_keys($content_splitted, '#' . $tag), '<a href="' . get_tag_link($term_id) . '">#' . $tag . '</a>'));
+                } else if (defined('POSTIE_DEBUG')){
+                    print_r($wp_term);
+                }
+            }
+        }
+        $post_tags = $tag_matches[1];
+        $content = trim(implode('', $content_splitted));
     }
 }
 
